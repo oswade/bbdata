@@ -3,38 +3,130 @@ name: Update BillBot Energy + Banking database
 on:
   workflow_dispatch:
   schedule:
-    # 03:17 Melbourne time avoids the top-of-hour Actions scheduling surge.
     - cron: "17 3 * * *"
       timezone: "Australia/Melbourne"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: billbot-daily-energy-banking
   cancel-in-progress: false
 
-env:
-  PYTHONUNBUFFERED: "1"
-
 jobs:
   update:
     runs-on: ubuntu-latest
-    # FULL Energy + full Banking can be deliberately slower than the old incremental job.
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
-      - name: Check out BillBot
-        uses: actions/checkout@v4
+      - name: Check out updater repo
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - name: Validate Cloudflare R2 configuration
-        id: r2
+      - name: Check updater
+        run: python update_market.py --self-test
+
+      - name: Build fresh FULL Energy + Banking database
         env:
-          ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PUBLIC_BASE: https://github.com/${{ github.repository }}/releases/latest/download
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .cloud output scan.log
+          if ! python update_market.py \
+            --db .cloud/billbot-daily.db \
+            --public-base-url "$PUBLIC_BASE" \
+            --output output/latest.db.gz \
+            --manifest output/manifest.json 2>&1 | tee scan.log; then
+            echo "::error::The BillBot FULL market scan failed. The Node.js messages are warnings, not the scan failure."
+            echo "----- LAST 120 SCAN LOG LINES -----"
+            tail -n 120 scan.log || true
+            exit 1
+          fi
+
+      - name: Validate generated assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s output/latest.db.gz
+          test -s output/manifest.json
+          python - <<'PY'
+          import gzip, hashlib, json, pathlib, sqlite3
+          root = pathlib.Path("output")
+          manifest = json.loads((root / "manifest.json").read_text())
+          blob = root / "latest.db.gz"
+          assert hashlib.sha256(blob.read_bytes()).hexdigest() == manifest["sha256"]
+          assert manifest["download_url"].endswith("/releases/latest/download/latest.db.gz")
+          assert manifest["counts"]["electricity_plans"] > 0
+          assert manifest["counts"]["gas_plans"] > 0
+          assert manifest["counts"]["savings_products"] > 0
+          raw = root / "verify.db"
+          with gzip.open(blob, "rb") as src, raw.open("wb") as dst:
+              while chunk := src.read(1024 * 1024):
+                  dst.write(chunk)
+          con = sqlite3.connect(raw)
+          try:
+              assert con.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+              assert con.execute("SELECT COUNT(*) FROM nbn_offers").fetchone()[0] == 0
+          finally:
+              con.close()
+          raw.unlink()
+          print("Release assets validated")
+          PY
+
+      - name: Publish as the sole current market-data Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DATA_REPO: ${{ github.repository }}
+          PUBLIC_BASE: https://github.com/${{ github.repository }}/releases/latest/download
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(gh repo view "$DATA_REPO" --json visibility --jq '.visibility')" == "PUBLIC" ]] || { echo "Repository must be PUBLIC" >&2; exit 2; }
+
+          PREVIOUS_LATEST="$(gh release list --repo "$DATA_REPO" --limit 100 --json tagName,isLatest --jq '.[] | select(.isLatest == true) | .tagName' | head -n 1)"
+          TAG="market-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          GENERATED_AT="$(python -c 'import json; print(json.load(open("output/manifest.json"))["generated_at"])')"
+          SNAPSHOT_ID="$(python -c 'import json; print(json.load(open("output/manifest.json"))["snapshot_id"])')"
+
+          gh release create "$TAG" --repo "$DATA_REPO" --draft \
+            --title "BillBot market data — $GENERATED_AT" \
+            --notes "Fresh FULL Energy + full Banking snapshot. NBN runs on-device. Snapshot: $SNAPSHOT_ID" \
+            output/manifest.json output/latest.db.gz
+
+          published=0
+          rollback() {
+            if [[ "$published" == "1" ]]; then
+              gh release delete "$TAG" --repo "$DATA_REPO" --cleanup-tag --yes || true
+              [[ -z "${PREVIOUS_LATEST:-}" ]] || gh release edit "$PREVIOUS_LATEST" --repo "$DATA_REPO" --latest || true
+            fi
+          }
+          trap rollback ERR
+
+          gh release edit "$TAG" --repo "$DATA_REPO" --draft=false --latest
+          published=1
+
+          tmp="$(mktemp)"
+          for attempt in 1 2 3 4 5; do
+            if curl --fail --silent --show-error --location --header 'Cache-Control: no-cache' \
+              "$PUBLIC_BASE/manifest.json?run=$GITHUB_RUN_ID" -o "$tmp" && cmp -s output/manifest.json "$tmp"; then
+              break
+            fi
+            [[ "$attempt" != "5" ]] || { echo "Latest manifest verification failed" >&2; exit 3; }
+            sleep $((attempt * 3))
+          done
+          rm -f "$tmp"
+
+          while IFS= read -r old; do
+            [[ -z "$old" || "$old" == "$TAG" ]] && continue
+            gh release delete "$old" --repo "$DATA_REPO" --cleanup-tag --yes
+          done < <(gh release list --repo "$DATA_REPO" --limit 100 --json tagName --jq '.[] | select(.tagName | startswith("market-")) | .tagName')
+
+          trap - ERR
+          echo "Published $TAG as the current BillBot market database."          ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY_ID }}
           SECRET_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           BUCKET: ${{ secrets.R2_BUCKET }}
