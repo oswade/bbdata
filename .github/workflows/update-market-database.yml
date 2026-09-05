@@ -1,1 +1,98 @@
+name: Update BillBot Energy + Banking database
 
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:17 Melbourne time avoids the top-of-hour Actions scheduling surge.
+    - cron: "17 3 * * *"
+      timezone: "Australia/Melbourne"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: billbot-daily-energy-banking
+  cancel-in-progress: false
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    # FULL Energy + full Banking can be deliberately slower than the old incremental job.
+    timeout-minutes: 120
+    steps:
+      - name: Check out BillBot
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Cloudflare R2 configuration
+        id: r2
+        env:
+          ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY_ID }}
+          SECRET_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          BUCKET: ${{ secrets.R2_BUCKET }}
+          PUBLIC_BASE: ${{ vars.BILLBOT_MARKET_PUBLIC_BASE_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$ACCOUNT_ID"
+          test -n "$ACCESS_KEY"
+          test -n "$SECRET_KEY"
+          test -n "$BUCKET"
+          test -n "$PUBLIC_BASE"
+          case "$PUBLIC_BASE" in
+            https://*) ;;
+            *) echo "BILLBOT_MARKET_PUBLIC_BASE_URL must use HTTPS" >&2; exit 2 ;;
+          esac
+          echo "endpoint=https://${ACCOUNT_ID}.r2.cloudflarestorage.com" >> "$GITHUB_OUTPUT"
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+          echo "public_base=${PUBLIC_BASE%/}/market" >> "$GITHUB_OUTPUT"
+
+      - name: Install R2 upload client
+        run: python -m pip install --disable-pip-version-check awscli
+
+      - name: Build fresh FULL Energy + Banking database
+        env:
+          PUBLIC_BASE: ${{ steps.r2.outputs.public_base }}
+        run: |
+          set -euo pipefail
+          mkdir -p .cloud output
+          python tools/cloud_market_update.py \
+            --db .cloud/billbot-daily.db \
+            --public-base-url "$PUBLIC_BASE" \
+            --output output/latest.db.gz \
+            --manifest output/manifest.json
+
+      - name: Upload current database then manifest
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          ENDPOINT: ${{ steps.r2.outputs.endpoint }}
+          BUCKET: ${{ steps.r2.outputs.bucket }}
+        run: |
+          set -euo pipefail
+          # BillBot intentionally retains no historical snapshots. The database is uploaded first
+          # and the manifest last. Android pins the expected SHA-256 and rejects any transient
+          # object/manifest mismatch during this short replacement window.
+          aws s3 cp output/latest.db.gz "s3://$BUCKET/market/latest.db.gz" \
+            --endpoint-url "$ENDPOINT" --no-progress \
+            --content-type application/gzip --cache-control "no-store,max-age=0"
+          aws s3 cp output/manifest.json "s3://$BUCKET/market/manifest.json" \
+            --endpoint-url "$ENDPOINT" --no-progress \
+            --content-type application/json --cache-control "no-store,max-age=0"
+
+      - name: Keep small diagnostic manifest for 7 days
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-manifest-${{ github.run_id }}
+          path: output/manifest.json
+          if-no-files-found: ignore
+          retention-days: 7
