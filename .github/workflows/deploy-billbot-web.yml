@@ -3,12 +3,13 @@ name: Build and deploy standalone BillBot website
 on:
   workflow_dispatch:
   push:
-    branches: [main, chatgpt/billbot-web-20261024]
+    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024]
     paths:
       - "website-source/billbot-web.zip"
       - "website-source/billbot-web.tar.xz.b64"
       - "website-source/package.override.json"
       - "website-source/ui-overlay.tar.xz.b64"
+      - "website-source/ai-llm-overlay.tar.xz.b64"
       - ".github/workflows/deploy-billbot-web.yml"
 
 permissions:
@@ -67,6 +68,20 @@ jobs:
           grep -q 'class="dark"' website-build/index.html
           ! grep -RilE 'lovable\.dev|supabase\.co' website-build/src/lib/billbot/market-data.ts
 
+      - name: Apply BillBot AI/LLM feature overlay
+        run: |
+          set -euo pipefail
+          base64 -d website-source/ai-llm-overlay.tar.xz.b64 > /tmp/billbot-ai-llm-overlay.tar.xz
+          echo "f0ffb621eed1b034eb9056729455e2dbaae3135142cefce4e8bcc861ed27b540  /tmp/billbot-ai-llm-overlay.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/billbot-ai-llm-overlay.tar.xz -C website-build
+          test -s website-build/src/routes/ai.tsx
+          test -s website-build/src/lib/billbot/llm-export.test.ts
+          ! grep -R 'rank-pill' website-build/src || {
+            echo "::error::Old ranking number badges remain"
+            exit 1
+          }
+          grep -q 'label: "AI/LLM"' website-build/src/components/billbot/Shell.tsx
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -75,6 +90,23 @@ jobs:
       - name: Install dependencies
         working-directory: website-build
         run: yarn install --non-interactive --no-progress
+
+      - name: Generate typed AI route and apply TypeScript compatibility fixes
+        working-directory: website-build
+        env:
+          VITE_BASE_PATH: /bbdata/
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path("src/lib/billbot/llm-export.ts")
+          s=p.read_text()
+          for name in ("electricity","gas","nbn","savings"):
+              s=s.replace("result."+name+" =", "result['"+name+"'] =")
+          p.write_text(s)
+          PY
+          # Vite's TanStack Router plugin generates the strongly typed route tree.
+          npm run build
+          grep -q "'/ai'" src/routeTree.gen.ts
 
       - name: Run React and tariff tests
         working-directory: website-build
