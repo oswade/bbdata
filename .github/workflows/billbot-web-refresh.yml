@@ -1,14 +1,17 @@
 name: Refresh BillBot web market data
 
 on:
+  schedule:
+    - cron: '0 22 * * *'
   workflow_dispatch:
     inputs:
       job_id:
-        required: true
+        required: false
         type: string
       callback_origin:
-        required: true
+        required: false
         type: string
+        default: https://project--42c40ce4-9d11-4642-9ab5-faae5dbfe144-dev.lovable.app
 
 permissions:
   contents: read
@@ -27,7 +30,7 @@ jobs:
       - name: Load the verified importer
         env:
           BILLBOT_JOB_ID: ${{ inputs.job_id }}
-          BILLBOT_CALLBACK_ORIGIN: ${{ inputs.callback_origin }}
+          BILLBOT_CALLBACK_ORIGIN: ${{ inputs.callback_origin || 'https://project--42c40ce4-9d11-4642-9ab5-faae5dbfe144-dev.lovable.app' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -38,17 +41,22 @@ jobs:
               'https://project--42c40ce4-9d11-4642-9ab5-faae5dbfe144-dev.lovable.app',
               'https://project--42c40ce4-9d11-4642-9ab5-faae5dbfe144.lovable.app',
           }
-          if origin not in allowed or not re.fullmatch(r'[a-f0-9-]{36}', os.environ['BILLBOT_JOB_ID']):
+          job = os.environ['BILLBOT_JOB_ID']
+          if origin not in allowed or (job and not re.fullmatch(r'[a-f0-9-]{36}', job)):
               raise ValueError('Invalid import destination or job')
           url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']
           req = urllib.request.Request(url + ('&' if '?' in url else '?') + 'audience=billbot-market-import', headers={'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
           with urllib.request.urlopen(req, timeout=30) as response:
               token = json.load(response)['value']
-          req = urllib.request.Request(origin + '/api/public/market-import?job_id=' + os.environ['BILLBOT_JOB_ID'], headers={'Authorization': 'Bearer ' + token})
+          req = urllib.request.Request(origin + '/api/public/market-import' + ('?job_id=' + job if job else ''), headers={'Authorization': 'Bearer ' + token})
           with urllib.request.urlopen(req, timeout=60) as response:
               payload = json.load(response)
           root = pathlib.Path('billbot-import')
           root.mkdir(exist_ok=True)
+          if payload.get('skip'):
+              (root / 'skip').touch()
+              print('An import is already running; skipped')
+              raise SystemExit(0)
           for name, content in payload['files'].items():
               target = root / name
               if pathlib.PurePosixPath(name).is_absolute() or '..' in pathlib.PurePosixPath(name).parts:
@@ -56,9 +64,13 @@ jobs:
               target.parent.mkdir(parents=True, exist_ok=True)
               target.write_text(content)
           (root / 'manifest.json').write_text(json.dumps(payload['manifest']))
+          (root / 'job_id').write_text(payload.get('job_id') or job)
           PY
       - name: Import the unchanged release
         env:
           BILLBOT_JOB_ID: ${{ inputs.job_id }}
-          BILLBOT_CALLBACK_ORIGIN: ${{ inputs.callback_origin }}
-        run: python3 billbot-import/import_market.py
+          BILLBOT_CALLBACK_ORIGIN: ${{ inputs.callback_origin || 'https://project--42c40ce4-9d11-4642-9ab5-faae5dbfe144-dev.lovable.app' }}
+        run: |
+          if [ -f billbot-import/skip ]; then exit 0; fi
+          export BILLBOT_JOB_ID="$(cat billbot-import/job_id)"
+          python3 billbot-import/import_market.py
