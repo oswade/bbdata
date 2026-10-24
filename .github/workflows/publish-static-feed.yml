@@ -1,0 +1,73 @@
+name: Publish BillBot public JSON market feed
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Update BillBot Energy + Banking database"]
+    types: [completed]
+  push:
+    branches: [chatgpt/static-feed-20261024]
+    paths:
+      - 'updater/build_market_csv.py'
+      - 'updater/export_web_data.py'
+      - 'updater/test_export_web_data.py'
+      - '.github/workflows/publish-static-feed.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: billbot-json-feed-${{ github.event_name == 'push' && github.ref_name || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # A failed database refresh must never replace a verified public feed.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the applicable branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref_name || 'main' }}
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run updater and feed tests
+        run: |
+          python updater/run_in_cloud.py --self-test
+          python -m unittest updater.test_export_web_data -v
+
+      - name: Download latest validated GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .cloud/work
+          gh release download -R "$GITHUB_REPOSITORY" --pattern 'latest.db.gz' --pattern 'manifest.json' --dir .cloud/work
+          test -s .cloud/work/latest.db.gz
+          test -s .cloud/work/manifest.json
+          mv .cloud/work/latest.db.gz .cloud/work/snapshot.db.gz
+
+      - name: Build postcode-indexed JSON, NBN and savings feed
+        run: python updater/export_web_data.py
+
+      - name: Publish JSON only on checked-out branch
+        env:
+          TARGET_BRANCH: ${{ github.event_name == 'push' && github.ref_name || 'main' }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A public-data/
+          if git diff --staged --quiet; then
+            echo 'Market feed is already up to date.'
+            exit 0
+          fi
+          git commit -m 'data: publish validated BillBot JSON feed'
+          git push origin "HEAD:${TARGET_BRANCH}"

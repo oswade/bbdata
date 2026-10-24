@@ -1,0 +1,1 @@
+{"format":1,"snapshot_id":"bae96d15cfff88f327775d3957688dc3157bcec8d307d3f9bbfd23ed2e3fa6cb","generated_at":"2026-10-24T02:18:50+00:00","counts":{"energy_electricity":10417,"energy_gas":1685,"nbn":230,"savings":416},"files":{"energy_electricity":"energy/ELECTRICITY/index.json","energy_gas":"energy/GAS/index.json","nbn":"nbn.json","savings":"savings.json"}}
