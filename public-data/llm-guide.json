@@ -1,0 +1,43 @@
+{
+  "format": "billbot.llm-data.v1",
+  "description": "Public BillBot market datasets for scheduled AI monitoring; no Lovable/Supabase or user-specific information.",
+  "data_owner": "BillBot GitHub market updater",
+  "license_note": "NBN plan data originates with NBN Tracker (CC BY-SA 4.0). Energy and savings data includes public CDR source records; check providers for current terms.",
+  "refresh": "Automatic after successfully validated market updater runs; ALWAYS fetch latest manifest before each automated review.",
+  "manifest": "https://raw.githubusercontent.com/oswade/bbdata/main/public-data/manifest.json",
+  "electricity": {
+    "index": "https://raw.githubusercontent.com/oswade/bbdata/main/public-data/energy/ELECTRICITY/index.json",
+    "instructions": [
+      "Read latest manifest.json, then the electricity index. Do not download and parse HTML tabs.",
+      "Given a four-digit postcode P and known distributor D, form the union of index.global, index.postcodes[P] and the IDs in index.distributors whose name matches D.",
+      "Fetch only the index.chunks entries at those chunk indexes, prefixing relative paths with https://raw.githubusercontent.com/oswade/bbdata/main/public-data/.",
+      "Filter rows for residential customer_type, nonstale records, and geographical eligibility. Inspect geo.included_postcodes, geo.excluded_postcodes, geo.included_distributors, geo.excluded_distributors to exclude ineligible offers.",
+      "Full tariff contract is in detail.c, including tariffPeriod, fees and eligibility. daily_supply_cents/avg_usage_cents alone are not an accurate annual cost. Match controlled-load and time-of-use terms to the user's bill."
+    ],
+    "pricing_warning": "Must account for contract periods/blocks, peak/off-peak, usage, controlled loads, conditional discounts and fees. If uncertain do not calculate an exact annual price."
+  },
+  "gas": {
+    "index": "https://raw.githubusercontent.com/oswade/bbdata/main/public-data/energy/GAS/index.json",
+    "instructions": "Use same index/chunk method as electricity. Gas annual usage is MJ, not kWh. Check postcode, network and tariff blocks."
+  },
+  "nbn": {
+    "all_offers": "https://raw.githubusercontent.com/oswade/bbdata/main/public-data/nbn.json",
+    "fields": [
+      "provider",
+      "plan",
+      "speed_tier",
+      "monthly_price",
+      "promo_monthly_price",
+      "promo_months",
+      "url"
+    ],
+    "instructions": "Filter desired NBN speed tier. Compare standard monthly recurring price separately from any discounted promotional period; include CIS URLs."
+  },
+  "savings": {
+    "all_offers": "https://raw.githubusercontent.com/oswade/bbdata/main/public-data/savings.json",
+    "instructions": "Distinguish base/ongoing interest from time-limited introductory promotional rates and check balance tiers, deposits, transaction requirements and fees."
+  },
+  "privacy": "All URLs are public market files. Personal bills, identity, and usage data entered in the browser are NOT available publicly and cannot be fetched by unattended tasks. A user may deliberately paste household usage into their task or attach the browser's local JSON export to a chat.",
+  "site_when_deployed": "https://oswade.github.io/bbdata/",
+  "fail_safe": "If data are unavailable, obsolete, unverified or insufficient to calculate tariffs, explicitly report limitations. Never hallucinate offers or exact savings."
+}
