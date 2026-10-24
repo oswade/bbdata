@@ -60,7 +60,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: website-build
-        run: npm install --no-audit --no-fund
+        run: yarn install --non-interactive --no-progress
 
       - name: Run React and tariff tests
         working-directory: website-build
