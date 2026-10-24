@@ -80,6 +80,10 @@ jobs:
         working-directory: website-build
         run: npm test
 
+      - name: TypeScript type check
+        working-directory: website-build
+        run: npm run lint
+
       - name: Production compile and static export
         working-directory: website-build
         env:
