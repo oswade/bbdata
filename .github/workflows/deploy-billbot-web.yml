@@ -1,0 +1,102 @@
+name: Build and deploy standalone BillBot website
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, chatgpt/billbot-web-20261024]
+    paths:
+      - "website-source/billbot-web.zip"
+      - ".github/workflows/deploy-billbot-web.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: billbot-pages
+  cancel-in-progress: false
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+
+      - name: Ensure full BillBot source is present
+        run: |
+          test -s website-source/billbot-web.zip || {
+            echo "::error::Upload BillBot_Full_Web_Source_Android_Parity.zip to website-source/billbot-web.zip before deploying."
+            exit 1
+          }
+
+      - name: Verify ZIP and extract separate website source
+        run: |
+          unzip -tq website-source/billbot-web.zip
+          mkdir -p website-build
+          unzip -q website-source/billbot-web.zip -d website-build
+          test -f website-build/package.json
+          test -f website-build/src/lib/billbot/pricing.ts
+          test -f website-build/src/lib/billbot/market-data.ts
+          ! grep -RiE '(supabase\.co|lovable\.dev|lovable\.app/api)' website-build/src || {
+            echo "::error::Standalone site still contains backend dependencies"
+            exit 1
+          }
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        working-directory: website-build
+        run: npm install --no-audit --no-fund
+
+      - name: Run React and tariff tests
+        working-directory: website-build
+        run: npm test
+
+      - name: Production compile and static export
+        working-directory: website-build
+        env:
+          VITE_BASE_PATH: /bbdata/
+        run: npm run build
+
+      - name: Smoke test generated index
+        run: |
+          test -s website-build/dist/index.html
+          grep -q 'assets/' website-build/dist/index.html
+          cp website-build/dist/index.html website-build/dist/404.html
+          touch website-build/dist/.nojekyll
+
+      - name: Upload checked build
+        uses: actions/upload-artifact@v4
+        with:
+          name: billbot-static-web
+          path: website-build/dist
+          if-no-files-found: error
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download checked build
+        uses: actions/download-artifact@v4
+        with:
+          name: billbot-static-web
+          path: dist
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
