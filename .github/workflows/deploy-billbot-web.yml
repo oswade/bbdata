@@ -6,6 +6,7 @@ on:
     branches: [main, chatgpt/billbot-web-20261024]
     paths:
       - "website-source/billbot-web.zip"
+      - "website-source/billbot-web.tar.xz.b64"
       - ".github/workflows/deploy-billbot-web.yml"
 
 permissions:
@@ -27,16 +28,22 @@ jobs:
 
       - name: Ensure full BillBot source is present
         run: |
-          test -s website-source/billbot-web.zip || {
-            echo "::error::Upload BillBot_Full_Web_Source_Android_Parity.zip to website-source/billbot-web.zip before deploying."
+          test -s website-source/billbot-web.tar.xz.b64 -o -s website-source/billbot-web.zip || {
+            echo "::error::No standalone BillBot source archive found."
             exit 1
           }
 
       - name: Verify ZIP and extract separate website source
         run: |
-          unzip -tq website-source/billbot-web.zip
           mkdir -p website-build
-          unzip -q website-source/billbot-web.zip -d website-build
+          if [ -s website-source/billbot-web.tar.xz.b64 ]; then
+            base64 -d website-source/billbot-web.tar.xz.b64 > /tmp/billbot-web.tar.xz
+            echo "c6e4bec2de5be38ab48cc653672e8cbf8ae0e9bbb0eaf584730c4b8bc5177a77  /tmp/billbot-web.tar.xz" | sha256sum -c -
+            tar -xJf /tmp/billbot-web.tar.xz -C website-build
+          else
+            unzip -tq website-source/billbot-web.zip
+            unzip -q website-source/billbot-web.zip -d website-build
+          fi
           test -f website-build/package.json
           test -f website-build/src/lib/billbot/pricing.ts
           test -f website-build/src/lib/billbot/market-data.ts
