@@ -45,6 +45,7 @@ jobs:
             unzip -q website-source/billbot-web.zip -d website-build
           fi
           test -f website-build/package.json
+          cp website-source/package.override.json website-build/package.json
           test -f website-build/src/lib/billbot/pricing.ts
           test -f website-build/src/lib/billbot/market-data.ts
           ! grep -RiE '(supabase\.co|lovable\.dev|lovable\.app/api)' website-build/src || {
