@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           base64 -d website-source/ui-overlay.tar.xz.b64 > /tmp/billbot-ui-overlay.tar.xz
-          echo "dcbc5bc0d68ca932886178ceb16286b3b146fbd7352291903c4c9ce7dacbfde4  /tmp/billbot-ui-overlay.tar.xz" | sha256sum -c -
+          echo "ff04fcf13ce6f965eec757cdad19da6312a48b4ba2ed02dd518931806a49e4fb  /tmp/billbot-ui-overlay.tar.xz" | sha256sum -c -
           tar -xJf /tmp/billbot-ui-overlay.tar.xz -C website-build
           test -s website-build/src/components/billbot/ThemeToggle.tsx
           test -s website-build/src/lib/billbot/ai-bill.ts
