@@ -94,7 +94,7 @@ jobs:
         run: |
           set -euo pipefail
           base64 -d website-source/nbn-ai-v5-overlay.tar.xz.b64 > /tmp/billbot-v5-overlay.tar.xz
-          echo "1a6f5857430139ab5304f3cb8bea0376cdb3d53284295c4cacb178efb31498ff  /tmp/billbot-v5-overlay.tar.xz" | sha256sum -c -
+          echo "ec8d033dd5b36799e07a45257039ca30bfe3d9a8a9a952b1f0418e50db77bb8f  /tmp/billbot-v5-overlay.tar.xz" | sha256sum -c -
           tar -xJf /tmp/billbot-v5-overlay.tar.xz -C website-build
           ! grep -q 'Lowest ongoing price' website-build/src/routes/nbn.tsx
           ! grep -q 'list-decimal' website-build/src/routes/ai.tsx
