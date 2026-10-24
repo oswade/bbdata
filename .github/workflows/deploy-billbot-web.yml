@@ -91,6 +91,23 @@ jobs:
         working-directory: website-build
         run: yarn install --non-interactive --no-progress
 
+      - name: Generate typed AI route and apply TypeScript compatibility fixes
+        working-directory: website-build
+        env:
+          VITE_BASE_PATH: /bbdata/
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path("src/lib/billbot/llm-export.ts")
+          s=p.read_text()
+          for name in ("electricity","gas","nbn","savings"):
+              s=s.replace("result."+name+" =", "result['"+name+"'] =")
+          p.write_text(s)
+          PY
+          # Vite's TanStack Router plugin generates the strongly typed route tree.
+          npm run build
+          grep -q "'/ai'" src/routeTree.gen.ts
+
       - name: Run React and tariff tests
         working-directory: website-build
         run: npm test
