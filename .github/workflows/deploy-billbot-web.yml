@@ -80,6 +80,51 @@ jobs:
           cp website-build/dist/index.html website-build/dist/404.html
           touch website-build/dist/.nojekyll
 
+      - name: Build portable single HTML for Android
+        working-directory: website-build
+        env:
+          VITE_BASE_PATH: ./
+        run: |
+          npm install --no-save --no-audit --no-fund vite-plugin-singlefile@2.3.0
+          python - <<'PY'
+          from pathlib import Path
+          router=Path("src/router.tsx")
+          body=router.read_text()
+          body=body.replace('import { createRouter } from "@tanstack/react-router";',
+                            'import { createHashHistory, createRouter } from "@tanstack/react-router";')
+          body=body.replace('    basepath: import.meta.env.BASE_URL,',
+                            '    basepath: "/",\n    history: createHashHistory(),')
+          router.write_text(body)
+          cfg=Path("vite.config.ts")
+          body=cfg.read_text()
+          body='import { viteSingleFile } from "vite-plugin-singlefile";\n'+body
+          body=body.replace('plugins: [', 'plugins: [viteSingleFile(), ', 1)
+          body=body.replace('export default defineConfig({',
+                            'export default defineConfig({\n  build: { cssCodeSplit: false, rollupOptions: { output: { inlineDynamicImports: true } } },')
+          cfg.write_text(body)
+          PY
+          npm run build
+          test -s dist/index.html
+          python - <<'PY'
+          from pathlib import Path
+          p=Path("dist/index.html")
+          html=p.read_text()
+          if '<script type="module"' not in html or 'id="root"' not in html:
+              raise SystemExit("Portable bundle missing required root or JavaScript")
+          if 'src="/bbdata/' in html or 'href="/bbdata/' in html:
+              raise SystemExit("Portable bundle still refers to hosted assets")
+          print("Portable HTML size:",len(html))
+          PY
+          mkdir -p portable-out
+          cp dist/index.html portable-out/BillBot_Android_Full.html
+
+      - name: Upload portable Android HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: BillBot-Android-Full-HTML
+          path: website-build/portable-out/BillBot_Android_Full.html
+          if-no-files-found: error
+
       - name: Upload checked build
         uses: actions/upload-artifact@v4
         with:
