@@ -3,13 +3,14 @@ name: Build and deploy standalone BillBot website
 on:
   workflow_dispatch:
   push:
-    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024]
+    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024]
     paths:
       - "website-source/billbot-web.zip"
       - "website-source/billbot-web.tar.xz.b64"
       - "website-source/package.override.json"
       - "website-source/ui-overlay.tar.xz.b64"
       - "website-source/ai-llm-overlay.tar.xz.b64"
+      - "website-source/apply-ui-fixes.py"
       - ".github/workflows/deploy-billbot-web.yml"
 
 permissions:
@@ -81,6 +82,12 @@ jobs:
             exit 1
           }
           grep -q 'label: "AI/LLM"' website-build/src/components/billbot/Shell.tsx
+
+      - name: Fix clipboard copying, NBN cost input and mobile column height
+        run: |
+          python website-source/apply-ui-fixes.py website-build
+          test -f website-build/src/lib/billbot/clipboard.test.ts
+          ! grep -q 'id="nbncur"' website-build/src/routes/nbn.tsx
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
