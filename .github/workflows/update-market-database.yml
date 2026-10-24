@@ -3,9 +3,9 @@ name: Update BillBot Energy + Banking database
 on:
   workflow_dispatch:
   schedule:
-    # GitHub cron is always UTC. 03:17 UTC = 14:17 Melbourne (AEDT),
-    # finishing well before the 22:00 UTC BillBot web import.
-    - cron: "17 3 * * *"
+    # GitHub cron is always UTC. 19:00 UTC = 6:00am Melbourne (AEDT),
+    # finishing well before the 7:00am BillBot web import.
+    - cron: "0 19 * * *"
 
 permissions:
   contents: write

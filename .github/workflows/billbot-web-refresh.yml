@@ -2,7 +2,7 @@ name: Refresh BillBot web market data
 
 on:
   schedule:
-    - cron: '0 22 * * *'
+    - cron: '0 20 * * *'  # 7:00am Melbourne (AEDT); GitHub cron is UTC
   workflow_dispatch:
     inputs:
       job_id:
