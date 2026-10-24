@@ -7,7 +7,8 @@ on:
     paths:
       - "website-source/billbot-web.zip"
       - "website-source/billbot-web.tar.xz.b64"
-      - "website-source/package.override.json"\n      - "website-source/ui-overlay.tar.xz.b64"
+      - "website-source/package.override.json"
+      - "website-source/ui-overlay.tar.xz.b64"
       - ".github/workflows/deploy-billbot-web.yml"
 
 permissions:
