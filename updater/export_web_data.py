@@ -154,8 +154,14 @@ def export(database: Path, source_manifest: Path, target: Path):
              'files':{'energy_electricity':electricity,'energy_gas':gas,
                       'nbn':'nbn.json','savings':'savings.json'}}
         write_json(out,'manifest.json',m)
+        # Keep the static, documented machine-readable feed guide across refreshes.
+        # All market JSON chunks are still fully replaced to avoid stale offers.
+        guide = target / 'llm-guide.json'
+        guide_content = guide.read_bytes() if guide.is_file() else None
         if target.exists(): shutil.rmtree(target)
         shutil.copytree(out,target)
+        if guide_content is not None:
+            (target / 'llm-guide.json').write_bytes(guide_content)
         print(json.dumps({'ok':True,**counts,'chunks_electricity':len(list((target/'energy'/'ELECTRICITY').glob('chunk-*.json')))},indent=2))
 
 
