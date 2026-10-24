@@ -3,7 +3,7 @@ name: Build and deploy standalone BillBot website
 on:
   workflow_dispatch:
   push:
-    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024]
+    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024, chatgpt/billbot-nbn-ai-prompts-20261024]
     paths:
       - "website-source/billbot-web.zip"
       - "website-source/billbot-web.tar.xz.b64"
@@ -11,6 +11,7 @@ on:
       - "website-source/ui-overlay.tar.xz.b64"
       - "website-source/ai-llm-overlay.tar.xz.b64"
       - "website-source/apply-ui-fixes.py"
+      - "website-source/nbn-ai-v5-overlay.tar.xz.b64"
       - ".github/workflows/deploy-billbot-web.yml"
 
 permissions:
@@ -88,6 +89,17 @@ jobs:
           python website-source/apply-ui-fixes.py website-build
           test -f website-build/src/lib/billbot/clipboard.test.ts
           ! grep -q 'id="nbncur"' website-build/src/routes/nbn.tsx
+
+      - name: Apply v5 compact NBN styling and offer-centric recurring AI prompts
+        run: |
+          set -euo pipefail
+          base64 -d website-source/nbn-ai-v5-overlay.tar.xz.b64 > /tmp/billbot-v5-overlay.tar.xz
+          echo "92098f5a2248103eae97de4e923c2ab4d76e0e591882380f19d53dcf99215a3b  /tmp/billbot-v5-overlay.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/billbot-v5-overlay.tar.xz -C website-build
+          ! grep -q 'Lowest ongoing price' website-build/src/routes/nbn.tsx
+          ! grep -q 'list-decimal' website-build/src/routes/ai.tsx
+          grep -q 'HIGHEST ongoing annual interest rate' website-build/src/lib/billbot/llm-export.ts
+          grep -q 'CHEAPEST ongoing standard monthly rate' website-build/src/lib/billbot/llm-export.ts
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
