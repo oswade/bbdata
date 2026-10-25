@@ -3,17 +3,16 @@ name: Publish BillBot public JSON market feed
 on:
   workflow_dispatch:
   # Fallback in case GitHub does not emit the workflow_run event.
-  # 00:00 UTC = 11:00 AEDT / 10:00 AEST, after the usual market snapshot.
+  # Runs 11:00 Melbourne time in summer and 10:00 in winter.
   schedule:
     - cron: '0 0 * * *'
-  # A change to this workflow also triggers a safe one-off catch-up refresh.
-  push:
-    branches: [main, chatgpt/static-feed-20261024]
-    paths:
-      - '.github/workflows/publish-static-feed.yml'
   workflow_run:
     workflows: ["Update BillBot Energy + Banking database"]
     types: [completed]
+  # Workflow changes trigger an immediate safe catch-up publication.
+  push:
+    branches: [main, chatgpt/static-feed-20261024]
+    paths:
       - 'updater/build_market_csv.py'
       - 'updater/export_web_data.py'
       - 'updater/test_export_web_data.py'
