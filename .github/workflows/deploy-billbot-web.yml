@@ -3,7 +3,7 @@ name: Build and deploy standalone BillBot website
 on:
   workflow_dispatch:
   push:
-    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024, chatgpt/billbot-nbn-ai-prompts-20261024, chatgpt/billbot-tier-labels-collapsible-20261029, chatgpt/billbot-visible-controls-20261029, chatgpt/billbot-toggle-cl-compact-header-20261030]
+    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024, chatgpt/billbot-nbn-ai-prompts-20261024, chatgpt/billbot-tier-labels-collapsible-20261029, chatgpt/billbot-visible-controls-20261029, chatgpt/billbot-toggle-cl-compact-header-20261030, chatgpt/billbot-cl-manual-20261030]
     paths:
       - "website-source/billbot-web.zip"
       - "website-source/billbot-web.tar.xz.b64"
@@ -17,6 +17,7 @@ on:
       - "website-source/v6-rate-display.test.ts"
       - "website-source/apply-v7.py.b64"
       - "website-source/apply-v8.py"
+      - "website-source/controlled-load-v9.tar.xz.b64"
       - ".github/workflows/deploy-billbot-web.yml"
 
 permissions:
@@ -131,6 +132,16 @@ jobs:
           python website-source/apply-v8.py website-build
           ! grep -q 'Cheapest for you' website-build/src/components/billbot/EnergyCompare.tsx
           ! grep -q 'id="controlled-load"' website-build/src/components/billbot/EnergyControls.tsx
+          grep -q 'role="switch"' website-build/src/components/billbot/EnergyControls.tsx
+          test -s website-build/src/lib/billbot/controlled-load.test.ts
+
+      - name: v9 compact controlled load and manual bill override
+        run: |
+          set -euo pipefail
+          base64 -d website-source/controlled-load-v9.tar.xz.b64 > /tmp/billbot-controlled-load-v9.tar.xz
+          echo "5b21f53a276e8150e0035bb17f888fd3f3d2527365641e9566bf6498d5b0b922  /tmp/billbot-controlled-load-v9.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/billbot-controlled-load-v9.tar.xz -C website-build
+          grep -q 'Controlled load (kWh)' website-build/src/components/billbot/BillUpload.tsx
           grep -q 'role="switch"' website-build/src/components/billbot/EnergyControls.tsx
           test -s website-build/src/lib/billbot/controlled-load.test.ts
 
