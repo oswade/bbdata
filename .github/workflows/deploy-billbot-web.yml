@@ -3,7 +3,7 @@ name: Build and deploy standalone BillBot website
 on:
   workflow_dispatch:
   push:
-    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024, chatgpt/billbot-nbn-ai-prompts-20261024, chatgpt/billbot-tier-labels-collapsible-20261029]
+    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024, chatgpt/billbot-nbn-ai-prompts-20261024, chatgpt/billbot-tier-labels-collapsible-20261029, chatgpt/billbot-visible-controls-20261029]
     paths:
       - "website-source/billbot-web.zip"
       - "website-source/billbot-web.tar.xz.b64"
@@ -15,6 +15,7 @@ on:
       - "website-source/apply-v6.py"
       - "website-source/v6-rate-display.ts"
       - "website-source/v6-rate-display.test.ts"
+      - "website-source/apply-v7.py.b64"
       - ".github/workflows/deploy-billbot-web.yml"
 
 permissions:
@@ -111,6 +112,18 @@ jobs:
           ! grep -q 'raw_rates.split(" | ")' website-build/src/components/billbot/EnergyCompare.tsx
           grep -q 'aria-expanded={feesOpen}' website-build/src/components/billbot/EnergyCompare.tsx
           grep -q 'aria-expanded={expanded}' website-build/src/components/billbot/EnergyControls.tsx
+
+      - name: v7 visible usage and tariff controls; collapsed bill upload only
+        run: |
+          set -euo pipefail
+          base64 -d website-source/apply-v7.py.b64 > /tmp/apply-v7.py
+          echo "7024be761954a4843149c41ab486036cd595c2477ec1d53c6af6b901f1cfecc1  /tmp/apply-v7.py" | sha256sum -c -
+          python /tmp/apply-v7.py website-build
+          grep -q 'Annual usage' website-build/src/components/billbot/EnergyControls.tsx
+          grep -q 'Controlled load' website-build/src/components/billbot/EnergyControls.tsx
+          grep -q 'Tariff' website-build/src/components/billbot/EnergyControls.tsx
+          grep -q 'aria-expanded={uploadExpanded}' website-build/src/components/billbot/EnergyControls.tsx
+          ! grep -q 'Current annual bill' website-build/src/components/billbot/EnergyControls.tsx
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
