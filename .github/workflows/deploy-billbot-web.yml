@@ -3,7 +3,7 @@ name: Build and deploy standalone BillBot website
 on:
   workflow_dispatch:
   push:
-    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024, chatgpt/billbot-nbn-ai-prompts-20261024]
+    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024, chatgpt/billbot-nbn-ai-prompts-20261024, chatgpt/billbot-tier-labels-collapsible-20261029]
     paths:
       - "website-source/billbot-web.zip"
       - "website-source/billbot-web.tar.xz.b64"
@@ -12,6 +12,9 @@ on:
       - "website-source/ai-llm-overlay.tar.xz.b64"
       - "website-source/apply-ui-fixes.py"
       - "website-source/nbn-ai-v5-overlay.tar.xz.b64"
+      - "website-source/apply-v6.py"
+      - "website-source/v6-rate-display.ts"
+      - "website-source/v6-rate-display.test.ts"
       - ".github/workflows/deploy-billbot-web.yml"
 
 permissions:
@@ -100,6 +103,14 @@ jobs:
           ! grep -q 'list-decimal' website-build/src/routes/ai.tsx
           grep -q 'HIGHEST ongoing annual interest rate' website-build/src/lib/billbot/llm-export.ts
           grep -q 'CHEAPEST ongoing standard monthly rate' website-build/src/lib/billbot/llm-export.ts
+
+      - name: v6 compact usage, nested fees and explained tariff tiers
+        run: |
+          python website-source/apply-v6.py website-build
+          test -s website-build/src/lib/billbot/rate-display.test.ts
+          ! grep -q 'raw_rates.split(" | ")' website-build/src/components/billbot/EnergyCompare.tsx
+          grep -q 'aria-expanded={feesOpen}' website-build/src/components/billbot/EnergyCompare.tsx
+          grep -q 'aria-expanded={expanded}' website-build/src/components/billbot/EnergyControls.tsx
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
