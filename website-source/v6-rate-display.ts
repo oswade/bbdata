@@ -2,7 +2,8 @@
  * Amounts in CDR are ex-GST; prices in the app are inclusive of 10% GST.
  */
 import { GST } from "./pricing";
-type Obj = Record<string, any>;
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Obj = any;
 export interface RateGroup { heading: string; lines: { label: string; price: string }[] }
 const arr = (value: any): Obj[] => (Array.isArray(value) ? value : value && typeof value === "object" ? [value] : []).filter((r): r is Obj => !!r && typeof r === "object" && !Array.isArray(r));
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
