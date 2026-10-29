@@ -3,7 +3,7 @@ name: Build and deploy standalone BillBot website
 on:
   workflow_dispatch:
   push:
-    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024, chatgpt/billbot-nbn-ai-prompts-20261024, chatgpt/billbot-tier-labels-collapsible-20261029, chatgpt/billbot-visible-controls-20261029]
+    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024, chatgpt/billbot-nbn-ai-prompts-20261024, chatgpt/billbot-tier-labels-collapsible-20261029, chatgpt/billbot-visible-controls-20261029, chatgpt/billbot-toggle-cl-compact-header-20261030]
     paths:
       - "website-source/billbot-web.zip"
       - "website-source/billbot-web.tar.xz.b64"
@@ -16,6 +16,7 @@ on:
       - "website-source/v6-rate-display.ts"
       - "website-source/v6-rate-display.test.ts"
       - "website-source/apply-v7.py.b64"
+      - "website-source/apply-v8.py"
       - ".github/workflows/deploy-billbot-web.yml"
 
 permissions:
@@ -124,6 +125,14 @@ jobs:
           grep -q 'Tariff' website-build/src/components/billbot/EnergyControls.tsx
           grep -q 'aria-expanded={uploadExpanded}' website-build/src/components/billbot/EnergyControls.tsx
           ! grep -q 'Current annual bill' website-build/src/components/billbot/EnergyControls.tsx
+
+      - name: v8 compact energy headers and controlled load on/off switch
+        run: |
+          python website-source/apply-v8.py website-build
+          ! grep -q 'Cheapest for you' website-build/src/components/billbot/EnergyCompare.tsx
+          ! grep -q 'id="controlled-load"' website-build/src/components/billbot/EnergyControls.tsx
+          grep -q 'role="switch"' website-build/src/components/billbot/EnergyControls.tsx
+          test -s website-build/src/lib/billbot/controlled-load.test.ts
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
