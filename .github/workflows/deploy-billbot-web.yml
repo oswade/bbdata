@@ -3,7 +3,7 @@ name: Build and deploy standalone BillBot website
 on:
   workflow_dispatch:
   push:
-    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024, chatgpt/billbot-nbn-ai-prompts-20261024, chatgpt/billbot-tier-labels-collapsible-20261029, chatgpt/billbot-visible-controls-20261029, chatgpt/billbot-toggle-cl-compact-header-20261030, chatgpt/billbot-cl-manual-20261030]
+    branches: [main, chatgpt/billbot-web-20261024, chatgpt/billbot-ai-llm-tab-20261024, chatgpt/billbot-copy-nbn-layout-20261024, chatgpt/billbot-nbn-ai-prompts-20261024, chatgpt/billbot-tier-labels-collapsible-20261029, chatgpt/billbot-visible-controls-20261029, chatgpt/billbot-toggle-cl-compact-header-20261030, chatgpt/billbot-cl-manual-20261030, chatgpt/billbot-v10-cl-reallocation-20261030]
     paths:
       - "website-source/billbot-web.zip"
       - "website-source/billbot-web.tar.xz.b64"
@@ -18,6 +18,7 @@ on:
       - "website-source/apply-v7.py.b64"
       - "website-source/apply-v8.py"
       - "website-source/controlled-load-v9.tar.xz.b64"
+      - "website-source/v10-fixes.tar.xz.b64"
       - ".github/workflows/deploy-billbot-web.yml"
 
 permissions:
@@ -143,6 +144,18 @@ jobs:
           tar -xJf /tmp/billbot-controlled-load-v9.tar.xz -C website-build
           grep -q 'Controlled load (kWh)' website-build/src/components/billbot/BillUpload.tsx
           grep -q 'role="switch"' website-build/src/components/billbot/EnergyControls.tsx
+          test -s website-build/src/lib/billbot/controlled-load.test.ts
+
+      - name: v10 fix controlled-load reallocation, AI one-off, unified bill input
+        run: |
+          set -euo pipefail
+          base64 -d website-source/v10-fixes.tar.xz.b64 > /tmp/billbot-v10.tar.xz
+          echo "e9b4e4921d5e2b9be687d85420c8b68d96f19987a2af48b06f59bb4ae3739ea4  /tmp/billbot-v10.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/billbot-v10.tar.xz -C website-build
+          grep -q 'electricityUsageSplit(req.annual_usage' website-build/src/lib/billbot/compare.ts
+          grep -q 'One off' website-build/src/routes/ai.tsx
+          ! grep -q 'setMode("manual")' website-build/src/components/billbot/BillUpload.tsx
+          grep -q 'Or enter manually' website-build/src/components/billbot/BillUpload.tsx
           test -s website-build/src/lib/billbot/controlled-load.test.ts
 
       - name: Set up Node.js
